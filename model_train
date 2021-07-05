@@ -1,0 +1,183 @@
+import os
+import numpy as np
+import time
+import datetime
+import torch
+import torchvision
+from torch import optim
+from torch.autograd import Variable
+import torch.nn.functional as F
+import csv
+from torchvision import datasets, transforms, models
+from torch.utils.data import Dataset, DataLoader
+from torchvision.datasets import ImageFolder
+from torch import nn
+from matplotlib import pyplot as plt
+import numpy as np
+from PIL import Image
+import torch.utils.data as data
+import glob
+import os
+import random
+
+from torch.utils import data
+
+from torchvision import transforms
+from torchvision.datasets.folder import (
+    IMG_EXTENSIONS,
+    default_loader,
+    has_file_allowed_extension,
+)
+from torchvision.transforms import functional as F
+
+
+
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+transforms= transforms.Compose([transforms.Resize(224),
+                                transforms.CenterCrop(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+
+class SegmentationDataset(data.Dataset):
+    def __init__(self, dir_images, dir_masks, transform=None, extensions=None):
+        
+        super().__init__()
+        self.dir_images = dir_images
+        self.dir_masks = dir_masks
+        self.transform = transform
+        self.extensions = extensions if extensions else IMG_EXTENSIONS
+        self.extensions = tuple(x.lower() for x in self.extensions)
+
+        self.img_names, self.mask_names = self.make_dataset()
+
+    def __getitem__(self, index):
+        img_name = self.img_names[index]
+        mask_name = self.mask_names[index]
+        img = default_loader(os.path.join(self.dir_images, img_name))
+        mask = default_loader(os.path.join(self.dir_masks, mask_name))
+        assert img.size == mask.size #아니면 assertionerror 발생
+
+        # if not self.transform:
+        #     return img, mask
+
+        img = self.transform(img)
+        mask = self.transform(mask)
+        return img, mask
+
+    def __len__(self):
+        return len(self.img_names)
+    
+    # def apply_transform(self):
+    #   img, mask = self.transform(img, mask)
+    #   return img, mask
+    
+    
+    def make_dataset(self):
+        img_names = sorted(os.listdir(self.dir_images))
+        mask_names = sorted(os.listdir(self.dir_masks))
+
+        img_names = [
+            x for x in img_names if has_file_allowed_extension(x, self.extensions)
+        ]
+        mask_names = [
+            x for x in mask_names if has_file_allowed_extension(x, self.extensions)
+        ]
+
+        assert len(img_names) == len(mask_names)
+
+
+        return img_names, mask_names
+
+
+# print(os.listdir('../gdrive/MyDrive/input_00/image/0'))
+
+
+dataset = SegmentationDataset(
+    dir_images = '../gdrive/MyDrive/input_00/image/0',
+    dir_masks = '../gdrive/MyDrive/input_00/mask/0',
+    transform=transforms
+)
+
+
+
+trainloader = DataLoader(dataset, batch_size = 1, shuffle=False)
+#dataset = ImageFolder(root ='/gdrive/My Drive/input_00', transform=transforms)
+#순서대로 2개
+#trainloader = DataLoader(dataset=dataset, batch_size =2, shuffle= False)
+
+#model
+model = NestedUNet()
+#loss 종류
+criterion = SoftDiceLoss()
+#criterion = nn.BCELoss()
+#Adam/lr,weight_decay조절
+optimizer = torch.optim.Adam(model.parameters(), lr= 3e-4)
+model.to(device)
+model.train()
+epochs = 50
+best_score =0.
+train_losses=[]
+for epoch in range(epochs):
+  epoch_loss =0
+  for index, images in enumerate(trainloader):
+    model.train()
+    #unsqueeze->차원추가
+    #원래 차원 : [3,244,244] / unsqueeze 후 : [1,3,244,244]
+    #images[1] = (images[1] - images[1].min()) / (images[1].max() - images[1].min())
+    img, label = images
+    
+    # print(img.size())
+    # print(label.size())
+    # plt.imshow(img[0][0], vmin=0, vmax=1, cmap='gray')
+    # plt.show()
+    # plt.imshow(label[0][0],vmin=0,vmax=1,cmap = 'gray')
+    # plt.show()
+    GT = label.to(device) #label
+    image = img.to(device) #image
+    output = model(image).to(device)
+    #print(output.size())
+    #print(output.max())
+    #temp = output.cpu().detach().numpy() #빨,노,회 3개 색깔로 구성
+    #print(temp.size)
+    #img = np.zeros((224,224,3))
+    #for ch in range(3):
+      #img[:, :,ch] = temp[0, 0]
+  
+    # print(img.max())
+    #plt.imshow(img)
+    #plt.show()
+    
+    
+    #output_probs = F.sigmoid(output)
+    
+    output_flat = output.view(output.size(0),-1) #size : [output.size(0),1]
+
+    GT_flat =GT.view(GT.size(0),-1)
+
+    #loss 종류
+    loss = criterion(output_flat, GT_flat)
+    epoch_loss += loss.item()
+
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+  train_losses.append(epoch_loss/len(trainloader))
+  print('[%d/%d]\tLoss: %.4f'  % (epoch, epochs,epoch_loss/len(trainloader)))
+
+path = '/gdrive/My Drive/test_image3_DL/epoch++{}.tar'.format(epochs)
+torch.save(model.state_dict(),path)
+
+fig, ax = plt.subplots(1,1)
+ax.plot(train_losses, label ='train_loss')
+ax.set_xlabel('epoch')
+ax.set_ylabel('loss')
+ax.set_title('Train loss')
+leg =ax.legend()
+fig.savefig('/gdrive/My Drive/test_image3_DL/unet_binary_DL.png')
