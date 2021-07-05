@@ -1,0 +1,296 @@
+import os
+import numpy as np
+import time
+import datetime
+import torch
+import torchvision
+from torch import optim
+from torch.autograd import Variable
+import torch.nn.functional as F
+import csv
+from torchvision import datasets, transforms, models
+from torch.utils.data import Dataset, DataLoader
+from torchvision.datasets import ImageFolder
+from torch import nn
+from matplotlib import pyplot as plt
+import numpy as np
+from PIL import Image
+import torch.utils.data as data
+import glob
+import os
+import random
+import torch
+
+from torch.utils import data
+
+from torchvision import transforms
+from torchvision.datasets.folder import (
+    IMG_EXTENSIONS,
+    default_loader,
+    has_file_allowed_extension,
+)
+from torchvision.transforms import functional as F
+
+
+transforms1= transforms.Compose([transforms.CenterCrop(294),
+                                transforms.Resize(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+
+
+
+
+
+
+transforms_H= transforms.Compose([
+                                transforms.CenterCrop(294),
+                                transforms.Resize(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                transforms.RandomHorizontalFlip(p = 1),
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+transforms_V = transforms.Compose([
+                                transforms.CenterCrop(294),
+                                transforms.Resize(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                transforms.RandomVerticalFlip(p = 1),
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+transforms_R = transforms.Compose([
+                                transforms.CenterCrop(294),
+                                transforms.Resize(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+
+transforms_D= transforms.Compose([
+                                transforms.CenterCrop(294),
+                                transforms.Resize(224),
+                                transforms.Grayscale(num_output_channels=1),
+                                
+                                transforms.ToTensor(), #image와 label값을 [0,1]로 바꿔줌
+                                #transforms.Normalize((0.5),(0.5))
+                                #transforms.Normalize([0.485, 0.456, 0.406], [0.228, 0.224, 0.225])
+                                ])
+
+
+
+
+
+class SegmentationDataset_R(data.Dataset):
+    def __init__(self, dir_images, dir_masks, transform=None, extensions=None):
+        
+        super().__init__()
+        self.dir_images = dir_images
+        self.dir_masks = dir_masks
+        self.transform = transform
+        self.extensions = extensions if extensions else IMG_EXTENSIONS
+        self.extensions = tuple(x.lower() for x in self.extensions)
+
+        self.img_names, self.mask_names = self.make_dataset()
+
+    def __getitem__(self, index):
+        img_name = self.img_names[index]
+        mask_name = self.mask_names[index]
+        img = default_loader(os.path.join(self.dir_images, img_name))
+        mask = default_loader(os.path.join(self.dir_masks, mask_name))
+        assert img.size == mask.size #아니면 assertionerror 발생
+
+        # if not self.transform:
+        #     return img, mask
+
+        img = self.transform(img)
+        mask = self.transform(mask)
+        a = torch.cat((img, mask), dim = 0)
+        rp = torchvision.transforms.RandomAffine(degrees = (-90,90))
+        a = rp(a)
+        
+        temp = a.cpu().detach().numpy() #빨,노,회 3개 색깔로 구성
+
+        img1 = np.zeros((224,224,1))
+        img1 = temp[0]
+        mask1 = np.zeros((224,224,1))
+        mask1 = temp[1]
+        b = torchvision.transforms.ToTensor() 
+        img1 = b(img1)
+        mask1 = b(mask1)    
+
+        
+        return img1, mask1
+
+
+    def __len__(self):
+        return len(self.img_names)
+    
+    # def apply_transform(self):
+    #   img, mask = self.transform(img, mask)
+    #   return img, mask
+    
+    
+    def make_dataset(self):
+        img_names = sorted(os.listdir(self.dir_images))
+        mask_names = sorted(os.listdir(self.dir_masks))
+
+        img_names = [
+            x for x in img_names if has_file_allowed_extension(x, self.extensions)
+        ]
+        mask_names = [
+            x for x in mask_names if has_file_allowed_extension(x, self.extensions)
+        ]
+
+        assert len(img_names) == len(mask_names)
+
+
+        return img_names, mask_names
+
+
+
+
+class SegmentationDataset_T(data.Dataset):
+    def __init__(self, dir_images, dir_masks, transform=None, extensions=None):
+        
+        super().__init__()
+        self.dir_images = dir_images
+        self.dir_masks = dir_masks
+        self.transform = transform
+        self.extensions = extensions if extensions else IMG_EXTENSIONS
+        self.extensions = tuple(x.lower() for x in self.extensions)
+
+        self.img_names, self.mask_names = self.make_dataset()
+
+    def __getitem__(self, index):
+        img_name = self.img_names[index]
+        mask_name = self.mask_names[index]
+        img = default_loader(os.path.join(self.dir_images, img_name))
+        mask = default_loader(os.path.join(self.dir_masks, mask_name))
+        assert img.size == mask.size #아니면 assertionerror 발생
+
+        # if not self.transform:
+        #     return img, mask
+
+        img = self.transform(img)
+        mask = self.transform(mask)
+        a = torch.cat((img, mask), dim = 0)
+        rp = torchvision.transforms.RandomAffine(degrees = (0,0), translate = (0.2, 0.2))
+        a = rp(a)
+        
+        temp = a.cpu().detach().numpy() #빨,노,회 3개 색깔로 구성
+
+        img1 = np.zeros((224,224,1))
+        img1 = temp[0]
+        mask1 = np.zeros((224,224,1))
+        mask1 = temp[1]
+        
+        b = torchvision.transforms.ToTensor() 
+        img1 = b(img1)
+        mask1 = b(mask1)    
+        
+        return img1, mask1
+
+
+    def __len__(self):
+        return len(self.img_names)
+    
+    # def apply_transform(self):
+    #   img, mask = self.transform(img, mask)
+    #   return img, mask
+    
+    
+    def make_dataset(self):
+        img_names = sorted(os.listdir(self.dir_images))
+        mask_names = sorted(os.listdir(self.dir_masks))
+
+        img_names = [
+            x for x in img_names if has_file_allowed_extension(x, self.extensions)
+        ]
+        mask_names = [
+            x for x in mask_names if has_file_allowed_extension(x, self.extensions)
+        ]
+
+        assert len(img_names) == len(mask_names)
+
+
+        return img_names, mask_names
+
+
+
+class SegmentationDataset_S(data.Dataset):
+    def __init__(self, dir_images, dir_masks, transform=None, extensions=None):
+        
+        super().__init__()
+        self.dir_images = dir_images
+        self.dir_masks = dir_masks
+        self.transform = transform
+        self.extensions = extensions if extensions else IMG_EXTENSIONS
+        self.extensions = tuple(x.lower() for x in self.extensions)
+
+        self.img_names, self.mask_names = self.make_dataset()
+
+    def __getitem__(self, index):
+        img_name = self.img_names[index]
+        mask_name = self.mask_names[index]
+        img = default_loader(os.path.join(self.dir_images, img_name))
+        mask = default_loader(os.path.join(self.dir_masks, mask_name))
+        assert img.size == mask.size #아니면 assertionerror 발생
+
+        # if not self.transform:
+        #     return img, mask
+
+        
+        img = self.transform(img)
+        mask = self.transform(mask)
+        a = torch.cat((img, mask), dim = 0)
+        rp = torchvision.transforms.RandomResizedCrop(size = (224,224), scale=(0.08, 1.0), ratio=(0.75, 1.3333333333333333))
+        a = rp(a)
+        
+        temp = a.cpu().detach().numpy() #빨,노,회 3개 색깔로 구성
+        img1 = np.zeros((224,224,1))
+        mask1 = np.zeros((224,224,1))
+        
+        img1 = temp[0]
+        
+        mask1 = temp[1]
+        
+        
+        b = torchvision.transforms.ToTensor() 
+        img1 = b(img1)
+        mask1 = b(mask1)       
+        return img1, mask1
+        
+    def __len__(self):
+        return len(self.img_names)
+    
+    # def apply_transform(self):
+    #   img, mask = self.transform(img, mask)
+    #   return img, mask
+    
+    
+    def make_dataset(self):
+        img_names = sorted(os.listdir(self.dir_images))
+        mask_names = sorted(os.listdir(self.dir_masks))
+
+        img_names = [
+            x for x in img_names if has_file_allowed_extension(x, self.extensions)
+        ]
+        mask_names = [
+            x for x in mask_names if has_file_allowed_extension(x, self.extensions)
+        ]
+
+        assert len(img_names) == len(mask_names)
+
+
+        return img_names, mask_names
