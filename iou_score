@@ -1,0 +1,12 @@
+for i in range(0,12):
+  a = Image.open('/gdrive/MyDrive/data_augmentation/unet/test{}.png'.format(i))
+  b = Image.open('/gdrive/MyDrive/input_00/test_mask/label{}.png'.format(i))
+  a = transforms1(a)
+  b = transforms1(b)
+  a1 = np.zeros_like(a)
+  a1[a>0] = 1
+  b1 = np.zeros_like(b)
+  b1[b>0] = 1
+  sum += compute_iou(a1,b1)
+
+print(sum/i)
